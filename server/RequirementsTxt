@@ -1,0 +1,11 @@
+flask
+torch --index-url https://download.pytorch.org/whl/cpu
+transformers
+sentencepiece
+pydub
+numpy
+psutil
+requests
+gTTS
+scipy
+soundfile
