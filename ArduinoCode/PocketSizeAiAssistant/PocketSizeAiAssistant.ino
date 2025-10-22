@@ -51,7 +51,7 @@ bool i2s_driver_installed = false;
 bool is_playing = false;
 
 WiFiClientSecure client;
- 
+
 void updateDisplay(String text, int size = 1) {
   display.clearDisplay();
   display.setTextSize(size);
@@ -64,14 +64,18 @@ void updateDisplay(String text, int size = 1) {
 
 void deinit_i2s() {
   if (i2s_driver_installed) {
+    i2s_zero_dma_buffer(I2S_NUM_0);
+    delay(50);
     i2s_driver_uninstall(I2S_NUM_0);
     i2s_driver_installed = false;
+    Serial.println("I2S Driver Uninstalled");
     delay(50);
   }
 }
 
 void init_i2s_rx() {
   deinit_i2s();
+  Serial.println("Initializing I2S RX");
   i2s_config_t rec_cfg = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
     .sample_rate = SAMPLE_RATE,
@@ -82,14 +86,28 @@ void init_i2s_rx() {
     .dma_buf_count = 8,
     .dma_buf_len = 512
   };
-  const i2s_pin_config_t rec_pin = { .bck_io_num = I2S_BCLK, .ws_io_num = I2S_LRC, .data_out_num = I2S_PIN_NO_CHANGE, .data_in_num = I2S_DIN };
-  i2s_driver_install(I2S_NUM_0, &rec_cfg, 0, NULL);
-  i2s_set_pin(I2S_NUM_0, &rec_pin);
+  const i2s_pin_config_t rec_pin = { 
+    .bck_io_num = I2S_BCLK, 
+    .ws_io_num = I2S_LRC, 
+    .data_out_num = I2S_PIN_NO_CHANGE, 
+    .data_in_num = I2S_DIN };
+  esp_err_t err_install = i2s_driver_install(I2S_NUM_0, &rec_cfg, 0, NULL);
+  if (err_install != ESP_OK) {
+    Serial.printf("!!! I2S RX driver install failed: %d\n", err_install);
+    return;  
+  }
+  esp_err_t err_pin = i2s_set_pin(I2S_NUM_0, &rec_pin);
+  if (err_pin != ESP_OK) {
+    Serial.printf("!!! I2S RX pin set failed: %d\n", err_pin);
+    i2s_driver_uninstall(I2S_NUM_0); 
+    return;
+  }
   i2s_driver_installed = true;
 }
 
 void init_i2s_tx() {
   deinit_i2s();
+  Serial.println("Initializing I2S TX");
   i2s_config_t play_cfg = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = SAMPLE_RATE,
@@ -97,14 +115,27 @@ void init_i2s_tx() {
     .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 8,
-    .dma_buf_len = 1024,
-    .use_apll = false, 
+    .dma_buf_count = 8,  
+    .dma_buf_len = 1024, 
+    .use_apll = false,   
     .tx_desc_auto_clear = true
   };
-  const i2s_pin_config_t play_pin = { .bck_io_num = I2S_BCLK, .ws_io_num = I2S_LRC, .data_out_num = I2S_DOUT, .data_in_num = I2S_PIN_NO_CHANGE };
-  i2s_driver_install(I2S_NUM_0, &play_cfg, 0, NULL);
-  i2s_set_pin(I2S_NUM_0, &play_pin);
+  const i2s_pin_config_t play_pin = { 
+    .bck_io_num = I2S_BCLK, 
+  .ws_io_num = I2S_LRC, 
+  .data_out_num = I2S_DOUT, 
+  .data_in_num = I2S_PIN_NO_CHANGE };
+  esp_err_t err_install = i2s_driver_install(I2S_NUM_0, &play_cfg, 0, NULL);
+  if (err_install != ESP_OK) {
+    Serial.printf("!!! I2S TX driver install failed: %d\n", err_install);
+    return;
+  }
+  esp_err_t err_pin = i2s_set_pin(I2S_NUM_0, &play_pin);
+  if (err_pin != ESP_OK) {
+    Serial.printf("!!! I2S TX pin set failed: %d\n", err_pin);
+    i2s_driver_uninstall(I2S_NUM_0);
+    return;
+  } 
   i2s_driver_installed = true;
 }
 
@@ -113,10 +144,10 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
-  client.setInsecure();
+  client.setInsecure(); 
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println("SSD1306 allocation failed"); 
+    Serial.println("SSD1306 allocation failed");
     delay(1000);
     display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
   }
@@ -135,8 +166,8 @@ void setup() {
   } else {
     updateDisplay("WiFi Error!", 1);
   }
-  init_i2s_rx();
-}
+  init_i2s_rx();  
+} 
 
 void loop() {
   if (digitalRead(BUTTON_PIN) == LOW && !is_recording && !is_playing) {
@@ -164,8 +195,9 @@ void startRecording() {
   init_i2s_rx();
   is_recording = true;
   record_start_time = millis();
- 
-  record_buffer_size = (MAX_RECORD_TIME_MS / 1000) * SAMPLE_RATE * (BITS_PER_SAMPLE / 8) + 44; 
+
+  record_buffer_size = (MAX_RECORD_TIME_MS / 1000) * SAMPLE_RATE * (BITS_PER_SAMPLE / 8) + 44;
+  if (record_buffer != nullptr) { free(record_buffer); } 
   record_buffer = (uint8_t*)malloc(record_buffer_size);
 
   if (!record_buffer) {
@@ -175,45 +207,44 @@ void startRecording() {
     updateDisplay("How Can I Help You", 1);
     return;
   }
-  record_position = 44; 
+  record_position = 44;
   updateDisplay("Recording...", 1);
 }
 
 void recordAudioData() {
-  size_t bytes_read; 
+  size_t bytes_read;
   if (record_position < record_buffer_size - 1024) {
-    i2s_read(I2S_NUM_0, record_buffer + record_position, 1024, &bytes_read, portMAX_DELAY);
-    if (bytes_read > 0) {
+    esp_err_t err = i2s_read(I2S_NUM_0, record_buffer + record_position, 1024, &bytes_read, 100 / portTICK_PERIOD_MS);
+    if (err == ESP_OK && bytes_read > 0) {
       record_position += bytes_read;
+    } else if (err != ESP_ERR_TIMEOUT) {
+      Serial.printf("I2S Read Error: %d\n", err);
     }
-  } else { 
-    // stopRecording();
-    // processAudio();
-    Serial.println("Record buffer nearly full, stopping early.");
   }
 }
 
 void stopRecording() {
   is_recording = false;
+  Serial.println("Recording stopped.");
   if (record_position > 44) {
     createWavHeader(record_buffer, record_position - 44);
   }
 }
 
 void processAudio() {
-  if (!record_buffer || record_position <= 44) return;
-
-  deinit_i2s(); 
-
+  if (!record_buffer || record_position <= 44) {
+    Serial.println("No audio data.");
+    return;
+  }
+  deinit_i2s();
   bool success = sendAudioToServer();
-
   if (!success) {
-    init_i2s_rx(); 
+    Serial.println("Processing failed.");
+    init_i2s_rx();
     updateDisplay("Unsuccessful!", 1);
     delay(2000);
     updateDisplay("How Can I Help You", 1);
   }
- 
   if (record_buffer) {
     free(record_buffer);
     record_buffer = nullptr;
@@ -221,9 +252,9 @@ void processAudio() {
   record_position = 0;
 }
 
-bool sendAudioToServer() {
-  HTTPClient http;
 
+bool sendAudioToServer() {
+  HTTPClient http; 
   if (!http.begin(client, server_url)) {
     Serial.println("POST begin failed");
     return false;
@@ -232,13 +263,13 @@ bool sendAudioToServer() {
   http.addHeader("Content-Type", "audio/wav");
   http.setTimeout(20000);
 
+  Serial.printf("Sending %zu bytes to server...\n", record_position);  
   int httpCode = http.POST(record_buffer, record_position);
 
   if (httpCode == 200) {
     String response = http.getString();
     http.end();
-
-    Serial.println("POST success, response received:");
+    Serial.println("POST success, response:");
     Serial.println(response);
 
     DynamicJsonDocument doc(2048);
@@ -252,8 +283,8 @@ bool sendAudioToServer() {
     if (doc.containsKey("stream_url") && doc.containsKey("message")) {
       String stream_url = doc["stream_url"];
       String message = doc["message"];
-      updateDisplay(message, 1);
-      return streamAndPlayAudio(server_base_url + stream_url);
+      updateDisplay(message, 1); 
+      return streamAndPlayAudioWithHTTPClient(server_base_url + stream_url);
     } else {
       Serial.println("JSON missing fields");
       return false;
@@ -265,10 +296,12 @@ bool sendAudioToServer() {
   }
 }
  
-bool streamAndPlayAudio(const String& url) {
+bool streamAndPlayAudioWithHTTPClient(const String& url) {
   is_playing = true;
   HTTPClient http;
 
+  Serial.print("Connecting to stream: ");
+  Serial.println(url); 
   if (!http.begin(client, url)) {
     Serial.println("GET begin failed");
     is_playing = false;
@@ -293,56 +326,101 @@ bool streamAndPlayAudio(const String& url) {
     return false;
   }
 
-  init_i2s_tx();
-  delay(100);  
+  init_i2s_tx();        
+  if (!i2s_driver_installed) {  
+    Serial.println("!!! Failed to init I2S TX for playback");
+    http.end();
+    is_playing = false;
+    return false;
+  }
+  delay(100); 
  
   size_t header_bytes_read = 0;
-  while (header_bytes_read < 44 && (stream->connected() || stream->available())) {
-    int c = stream->read();
-    if (c == -1) {
-      delay(1);
-      continue;
-    };
-    header_bytes_read++;
+  unsigned long header_start_time = millis();
+  while (header_bytes_read < 44 && millis() - header_start_time < 5000) { 
+    int bytes_available = stream->available();
+    if (bytes_available > 0) {
+      int bytes_to_read = min((int)(44 - header_bytes_read), bytes_available);
+      uint8_t dummy_buffer[bytes_to_read];
+      int read_len = stream->read(dummy_buffer, bytes_to_read);
+      if (read_len > 0) {
+        header_bytes_read += read_len;
+      } else if (read_len < 0) {
+        Serial.println("!!! Header read error");
+        break;  
+      }
+    } else if (!stream->connected()) {
+      Serial.println("!!! Stream disconnected during header read");
+      break;  
+    } else {
+      delay(5); 
+    }
   }
+  if (header_bytes_read < 44) {
+    Serial.println("!!! Failed to read full WAV header or timeout.");
+    http.end();
+    deinit_i2s();  
+    init_i2s_rx();  
+    is_playing = false;
+    return false;
+  }
+  Serial.println("WAV header skipped.");
+
 
   uint8_t playback_buffer[PLAYBACK_BUFFER_SIZE];
   size_t total_bytes_written = 0;
+  unsigned long lastDataTime = millis();
+  const unsigned long streamTimeoutMs = 2000;  
 
   Serial.println("Starting audio playback..."); 
-  while (stream->connected() || stream->available()) {
+  while (millis() - lastDataTime < streamTimeoutMs) {
+    if (!stream->connected() && !stream->available()) {
+      Serial.println("Stream disconnected and no data left.");
+      break; 
+    }
+
     int len = stream->readBytes(playback_buffer, PLAYBACK_BUFFER_SIZE);
     if (len > 0) {
+      lastDataTime = millis(); 
       size_t bytes_written = 0;
-      esp_err_t err = i2s_write(I2S_NUM_0, playback_buffer, len, &bytes_written, portMAX_DELAY);
-      if (err != ESP_OK) {
-        Serial.printf("I2S write error: %d\n", err);
+      esp_err_t write_err = i2s_write(I2S_NUM_0, playback_buffer, len, &bytes_written, 500 / portTICK_PERIOD_MS); 
+      if (write_err != ESP_OK) {
+        Serial.printf("!!! I2S Write Error: %d, bytes written: %zu\n", write_err, bytes_written); 
       }
       total_bytes_written += bytes_written;
+      if (bytes_written != len) {
+        Serial.printf("!!! I2S Write Warning: Tried %d, wrote %zu\n", len, bytes_written);
+      }
     } else { 
-      delay(5);
+      delay(10);
     }
   }
-  Serial.println("Stream finished.");
+
+  if (millis() - lastDataTime >= streamTimeoutMs) {
+    Serial.println("Stream finished due to inactivity timeout.");
+  } else {
+    Serial.println("Stream finished.");
+  }
  
+  Serial.println("Waiting for I2S buffer to empty...");
   esp_err_t zero_err = i2s_zero_dma_buffer(I2S_NUM_0);
   if (zero_err != ESP_OK) {
-    Serial.printf("I2S zero DMA buffer error: %d\n", zero_err);
+    Serial.printf("!!! I2S zero DMA buffer error: %d\n", zero_err);
   }
-  delay(200); 
+  delay(300);   
 
-  http.end();
+  http.end();  
 
-  deinit_i2s();
-  init_i2s_rx(); 
+  deinit_i2s();  
+  init_i2s_rx();  
 
   updateDisplay("How Can I Help You", 1);
   is_playing = false;
 
-  Serial.printf("Total bytes played: %d\n", total_bytes_written);
-  return total_bytes_written > 0; 
+  Serial.printf("Total bytes played: %zu\n", total_bytes_written);
+  return total_bytes_written > 0;
 }
-
+ 
 void createWavHeader(byte* header, int wavDataSize) {
   header[0] = 'R';
   header[1] = 'I';
@@ -368,18 +446,18 @@ void createWavHeader(byte* header, int wavDataSize) {
   header[20] = 1;
   header[21] = 0;
   header[22] = 1;
-  header[23] = 0;
+  header[23] = 0;  // Mono
   header[24] = (byte)(SAMPLE_RATE & 0xFF);
   header[25] = (byte)((SAMPLE_RATE >> 8) & 0xFF);
   header[26] = 0;
   header[27] = 0;
-  unsigned int byteRate = SAMPLE_RATE * BITS_PER_SAMPLE / 8;
+  unsigned int byteRate = SAMPLE_RATE * 1 * BITS_PER_SAMPLE / 8;  // 1 = Mono
   header[28] = (byte)(byteRate & 0xFF);
   header[29] = (byte)((byteRate >> 8) & 0xFF);
   header[30] = 0;
   header[31] = 0;
-  header[32] = (BITS_PER_SAMPLE / 8);
-  header[33] = 0;
+  header[32] = (1 * BITS_PER_SAMPLE / 8);
+  header[33] = 0;  // Block align
   header[34] = BITS_PER_SAMPLE;
   header[35] = 0;
   header[36] = 'd';
