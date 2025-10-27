@@ -19,6 +19,10 @@ import uuid
 import subprocess
 import tempfile
 import atexit
+import requests
+from datetime import datetime
+import json
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -50,6 +54,12 @@ tts_type = None
 active_files = {}
 file_cleanup_lock = threading.Lock()
 cleanup_thread = None
+ 
+SEARCH_KEYWORDS = [
+    'today', 'yesterday', 'current', 'latest', 'recent', 'news', 
+    'now', 'this year', '2025', '2024', 'weather', 'price',
+    'who is', 'what is', 'when did', 'where is', 'how much'
+]
 
 def cleanup_old_files():
     while True:
@@ -117,6 +127,110 @@ def get_memory_usage():
         logger.warning(f"Memory info error: {e}")
         return {"rss_mb": 0, "vms_mb": 0, "available_mb": 0, "percent": 0}
 
+def needs_web_search(text): 
+    text_lower = text.lower()
+     
+    for keyword in SEARCH_KEYWORDS:
+        if keyword in text_lower:
+            logger.info(f"Web search triggered by keyword: '{keyword}'")
+            return True
+     
+    if re.search(r'\b(202[0-9]|2030)\b', text):
+        logger.info("Web search triggered by year reference")
+        return True
+    
+    return False
+
+def search_web(query, max_results=3): 
+    try:
+        logger.info(f"🔍 Searching web for: '{query}'")
+         
+        url = "https://api.duckduckgo.com/"
+        params = {
+            'q': query,
+            'format': 'json',
+            'no_html': 1,
+            'skip_disambig': 1
+        }
+        
+        response = requests.get(url, params=params, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            results = []
+             
+            if data.get('Abstract'):
+                results.append({
+                    'title': data.get('Heading', 'General Info'),
+                    'snippet': data['Abstract'][:300]
+                })
+             
+            if data.get('RelatedTopics'):
+                for topic in data['RelatedTopics'][:max_results]:
+                    if isinstance(topic, dict) and topic.get('Text'):
+                        results.append({
+                            'title': topic.get('FirstURL', '').split('/')[-1].replace('_', ' '),
+                            'snippet': topic['Text'][:200]
+                        })
+             
+            if not results:
+                wiki_query = f"{query} site:wikipedia.org"
+                results = search_fallback(wiki_query)
+            
+            if results:
+                logger.info(f"✅ Found {len(results)} web results")
+                return results
+            else:
+                logger.warning("No web results found")
+                return []
+        
+        return []
+        
+    except Exception as e:
+        logger.error(f"Web search error: {e}")
+        return []
+
+def search_fallback(query): 
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=5)
+        
+        if response.status_code == 200: 
+            text = response.text
+            snippets = []
+             
+            import re
+            matches = re.findall(r'class="result__snippet"[^>]*>([^<]+)<', text)
+            
+            for match in matches[:3]:
+                snippets.append({
+                    'title': 'Search Result',
+                    'snippet': match.strip()[:200]
+                })
+            
+            return snippets
+        
+        return []
+        
+    except Exception as e:
+        logger.error(f"Fallback search error: {e}")
+        return []
+
+def format_search_context(search_results): 
+    if not search_results:
+        return ""
+    
+    context = "\n\nWeb Search Results:\n"
+    for i, result in enumerate(search_results, 1):
+        context += f"{i}. {result['title']}: {result['snippet']}\n"
+    
+    return context
+
 def initialize_models():  
     global stt_pipeline, llm_model, llm_tokenizer, tts_pipeline, tts_type
     
@@ -143,7 +257,7 @@ def initialize_models():
             logger.info(f"STT loaded. Memory: {get_memory_usage()}")
  
         if llm_model is None:
-            logger.info("Loading DialoGPT-small LLM...")
+            logger.info("Loading FLAN-T5 LLM...")
             try:
                 model_name = "google/flan-t5-base"
                 
@@ -200,20 +314,21 @@ def initialize_models():
         logger.error(f"Memory usage at error: {get_memory_usage()}")
         raise e
 
-@lru_cache(maxsize=32)
-def cached_generate_response(text_hash, text): 
-    return generate_llm_response(text)
-
-def generate_llm_response(text):
-    try: 
+def generate_llm_response(text, search_context=""): 
+    try:  
         if len(text) > 200:
             text = text[:200]
 
         if not text.strip():
             return "I'm listening. How can I help you?"
- 
+         
+        if search_context:
+            prompt = f"Based on the following information, answer the question concisely.\n{search_context}\n\nQuestion: {text}\nAnswer:"
+        else:
+            prompt = f"Answer concisely: {text}"
+         
         inputs = llm_tokenizer(
-            text,
+            prompt,
             return_tensors="pt",
             truncation=True,
             padding=True,
@@ -223,43 +338,38 @@ def generate_llm_response(text):
         attention_mask = inputs.get("attention_mask")
         if attention_mask is not None:
             attention_mask = attention_mask.to(device)
- 
+  
         with torch.no_grad():
-            is_seq2seq = getattr(getattr(llm_model, "config", {}), "is_encoder_decoder", False)
-
             gen_kwargs = dict(
-                max_new_tokens=50,
+                max_new_tokens=60, 
                 do_sample=True,
                 temperature=0.7,
                 top_k=50,
                 top_p=0.9,
                 no_repeat_ngram_size=2,
                 early_stopping=True,
-                pad_token_id=llm_tokenizer.eos_token_id if llm_tokenizer.pad_token_id is None else llm_tokenizer.pad_token_id,
+                pad_token_id=llm_tokenizer.pad_token_id or llm_tokenizer.eos_token_id,
                 use_cache=True
             )
 
-            if is_seq2seq:
-                outputs_ids = llm_model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    **gen_kwargs
-                )
-            else: 
-                outputs_ids = llm_model.generate(
-                    input_ids=input_ids,
-                    **gen_kwargs
-                )
+            outputs_ids = llm_model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                **gen_kwargs
+            )
  
         response = llm_tokenizer.decode(outputs_ids[0], skip_special_tokens=True)
- 
+  
         del inputs, input_ids, attention_mask, outputs_ids
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
 
         response = response.strip()
+         
         if not response or len(response) < 3:
+            if search_context:
+                return "I found some information but couldn't process it properly."
             return "I understand. What else would you like to know?"
 
         return response
@@ -268,13 +378,12 @@ def generate_llm_response(text):
         logger.error(f"LLM generation error: {e}", exc_info=True)
         return "I'm having trouble processing that. Could you try again?"
 
-
 def preprocess_audio_optimized(audio_bytes):  
     try:
         logger.info(f"Processing audio: {len(audio_bytes)} bytes")
         
         if len(audio_bytes) > 44 and audio_bytes[:4] == b'RIFF':
-            audio_bytes = audio_bytes[44:]  
+            audio_bytes = audio_bytes[44:]
             logger.info("WAV header removed")
         
         audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
@@ -308,66 +417,97 @@ def generate_tts_audio(text):
 
         if tts_type == "gtts":
             from gtts import gTTS
+            from pydub import AudioSegment
+            import wave
+            import numpy as np
+            
             max_retries = 3
             retry_delay = 2
 
             for attempt in range(max_retries):
                 try:
-                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
-                        try:
+                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_mp3:
+                        try: 
                             tts = gTTS(text=text, lang='en', slow=False, timeout=10)
-                            tts.save(tmp_file.name)
-
-                            from pydub import AudioSegment
-                            audio_segment = AudioSegment.from_file(tmp_file.name, format="mp3")
+                            tts.save(tmp_mp3.name)
  
-                            audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
- 
+                            audio = AudioSegment.from_file(tmp_mp3.name, format="mp3")
+                            audio = audio.normalize()
+                            audio = audio.set_frame_rate(16000)
+                            audio = audio.set_channels(1)
+                            audio = audio.set_sample_width(2)
+                            audio = audio.fade_in(50).fade_out(100)
+                             
+                            raw_data = np.array(audio.get_array_of_samples(), dtype=np.int16)
+                             
                             wav_buffer = io.BytesIO()
-                            audio_segment.export(wav_buffer, format="wav")
+                            
+                            with wave.open(wav_buffer, 'wb') as wav_file:
+                                wav_file.setnchannels(1)
+                                wav_file.setsampwidth(2)
+                                wav_file.setframerate(16000)
+                                wav_file.writeframes(raw_data.tobytes())
+                            
                             wav_data = wav_buffer.getvalue()
-
-                            os.unlink(tmp_file.name)
- 
-                            logger.info(f"TTS generated: {len(wav_data)} bytes at 16kHz")
+                             
+                            os.unlink(tmp_mp3.name)
+                             
+                            if len(wav_data) < 1000:
+                                raise ValueError(f"Audio too short: {len(wav_data)} bytes")
+                             
+                            if wav_data[:4] != b'RIFF' or wav_data[8:12] != b'WAVE':
+                                raise ValueError("Invalid WAV format")
+                            
+                            logger.info(f"✓ Clean WAV generated: {len(wav_data)} bytes")
+                            
                             return wav_data
 
                         except Exception as e:
-                            if os.path.exists(tmp_file.name):
-                                os.unlink(tmp_file.name)
+                            if os.path.exists(tmp_mp3.name):
+                                os.unlink(tmp_mp3.name)
                             raise e
 
                 except Exception as e:
                     error_str = str(e)
-                    if "429" in error_str or "Too Many Requests" in error_str or attempt < max_retries - 1:
+                    if "429" in error_str or "Too Many Requests" in error_str:
                         if attempt < max_retries - 1:
-                            logger.warning(f"TTS attempt {attempt + 1} failed: {e}. Retrying in {retry_delay}s...")
+                            logger.warning(f"TTS retry {attempt + 1}...")
                             time.sleep(retry_delay)
                             retry_delay *= 1.5
                             continue
-                    logger.error(f"TTS final error: {e}")
-                    raise e 
+                    logger.error(f"TTS error: {e}")
+                    raise e
  
-        logger.warning("Using silent fallback or gTTS failed")
-        from pydub import AudioSegment 
-        silence = AudioSegment.silent(duration=1000) 
-        silence = silence.set_frame_rate(16000).set_channels(1)
- 
+        logger.warning("Using silent fallback")
+        import wave
+        import numpy as np
+        
+        silence_samples = np.zeros(16000, dtype=np.int16)
+        
         wav_buffer = io.BytesIO()
-        silence.export(wav_buffer, format="wav")
+        with wave.open(wav_buffer, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(silence_samples.tobytes())
+        
         return wav_buffer.getvalue()
 
     except Exception as e:
-        logger.error(f"General TTS error: {e}")
-        try: 
-            from pydub import AudioSegment
-            silence = AudioSegment.silent(duration=1000)
-            silence = silence.set_frame_rate(16000).set_channels(1)
-            wav_buffer = io.BytesIO()
-            silence.export(wav_buffer, format="wav")
-            return wav_buffer.getvalue()
-        except:
-            return b'' 
+        logger.error(f"TTS critical error: {e}")
+        import wave
+        import numpy as np
+        
+        silence_samples = np.zeros(8000, dtype=np.int16)
+        
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(silence_samples.tobytes())
+        
+        return wav_buffer.getvalue()
 
 @app.route('/process_audio', methods=['POST'])
 def process_audio():  
@@ -386,7 +526,7 @@ def process_audio():
     initial_memory = get_memory_usage()
     logger.info(f"🎯 Processing started. Memory: {initial_memory['rss_mb']:.1f}MB")
 
-    try: 
+    try:  
         logger.info("🎤 Converting speech to text...")
         stt_start = time.time()
         
@@ -405,64 +545,86 @@ def process_audio():
         gc.collect()
         
         stt_time = time.time() - stt_start
-        logger.info(f"✅ STT completed: '{transcribed_text}' ({stt_time:.2f}s)")
+        logger.info(f"✅ STT: '{transcribed_text}' ({stt_time:.2f}s)")
         
         if not transcribed_text or len(transcribed_text) < 2:
             transcribed_text = "Could you repeat that please?"
-
+ 
+        search_context = ""
+        web_search_used = False
+        
+        if needs_web_search(transcribed_text):
+            search_start = time.time()
+            search_results = search_web(transcribed_text)
+            
+            if search_results:
+                search_context = format_search_context(search_results)
+                web_search_used = True
+                logger.info(f"🌐 Web search completed ({time.time() - search_start:.2f}s)")
+            else:
+                logger.info("No relevant search results found")
+ 
         logger.info("🤖 Generating AI response...")
         llm_start = time.time()
         
-        text_hash = hash(transcribed_text.lower())
-        assistant_response = cached_generate_response(text_hash, transcribed_text)
+        assistant_response = generate_llm_response(transcribed_text, search_context)
         
         llm_time = time.time() - llm_start
-        logger.info(f"✅ LLM completed: '{assistant_response}' ({llm_time:.2f}s)")
-
+        logger.info(f"✅ LLM: '{assistant_response}' ({llm_time:.2f}s)")
+ 
         logger.info("🔊 Converting to speech...")
         tts_start = time.time()
         
         audio_response = generate_tts_audio(assistant_response)
         
-        if not audio_response:
+        if not audio_response or len(audio_response) < 1000:
+            logger.error("TTS produced invalid audio")
             return jsonify({"error": "TTS generation failed"}), 500
         
         tts_time = time.time() - tts_start
-        total_time = time.time() - start_time
-         
-        gc.collect()
-        torch.cuda.empty_cache() if device == "cuda" else None
-        
-        final_memory = get_memory_usage()
-        logger.info(f"✅ Processing complete! Total: {total_time:.2f}s (STT:{stt_time:.1f}s, LLM:{llm_time:.1f}s, TTS:{tts_time:.1f}s)")
-        logger.info(f"Memory: {initial_memory['rss_mb']:.1f}MB → {final_memory['rss_mb']:.1f}MB")
-
+          
         if not os.path.exists(app.config['TEMP_AUDIO_DIR']):
             os.makedirs(app.config['TEMP_AUDIO_DIR'])
         
         file_id = str(uuid.uuid4())
-        temp_filename = os.path.join(app.config['TEMP_AUDIO_DIR'], f"{file_id}.mp3")
-        
         temp_filename = os.path.join(app.config['TEMP_AUDIO_DIR'], f"{file_id}.wav")
+         
         with open(temp_filename, 'wb') as f:
             f.write(audio_response)
+            f.flush()
+            os.fsync(f.fileno()) 
+         
+        if not os.path.exists(temp_filename):
+            logger.error("File write failed")
+            return jsonify({"error": "File save failed"}), 500
+            
+        file_size = os.path.getsize(temp_filename)
+        logger.info(f"Audio saved: {file_id}.wav ({file_size} bytes)")
+         
+        time.sleep(0.1)
          
         with file_cleanup_lock:
             active_files[file_id] = {
                 'filepath': temp_filename,
                 'created_time': time.time(),
-                'accessed': False
+                'accessed': False,
+                'size': file_size
             }
-         
+        
+        total_time = time.time() - start_time
+        
         response_data = {
             'status': 'success',
             'file_id': file_id,
             'stream_url': f'/stream_audio/{file_id}',
             'message': assistant_response,
             'transcribed': transcribed_text,
-            'processing_time': round(total_time, 2)
+            'processing_time': round(total_time, 2),
+            'audio_size': file_size,
+            'web_search_used': web_search_used
         }
         
+        logger.info(f"✅ Complete: {file_id} ({total_time:.2f}s) [Web:{web_search_used}]")
         return jsonify(response_data)
 
     except Exception as e:
@@ -481,14 +643,39 @@ def stream_audio(file_id):
         file_info = active_files.get(file_id)
 
     if not file_info or not os.path.exists(file_info['filepath']):
+        logger.error(f"File not found: {file_id}")
         return jsonify({'error': 'File not found or expired.'}), 404
 
-    def generate():
-        with open(file_info['filepath'], 'rb') as f:
-            while chunk := f.read(1024):
-                yield chunk
+    filepath = file_info['filepath']
+    file_size = os.path.getsize(filepath)
+    logger.info(f"Streaming {file_id}: {file_size} bytes")
 
-    return Response(generate(), mimetype='audio/wav')
+    def generate():
+        try:
+            with open(filepath, 'rb') as f: 
+                data = f.read()
+                chunk_size = 1024
+                for i in range(0, len(data), chunk_size):
+                    chunk = data[i:i + chunk_size]
+                    yield chunk 
+                    time.sleep(0.001)
+                    
+            logger.info(f"Stream {file_id} completed")
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+
+    response = Response(
+        generate(), 
+        mimetype='audio/wav',
+        direct_passthrough=False
+    )
+    
+    response.headers['Content-Length'] = str(file_size)
+    response.headers['Accept-Ranges'] = 'bytes'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    
+    return response
 
 @app.route('/health', methods=['GET'])
 def health_check(): 
@@ -512,6 +699,10 @@ def health_check():
         "files": {
             "active_count": len(active_files),
             "cleanup_running": cleanup_thread is not None and cleanup_thread.is_alive()
+        },
+        "features": {
+            "web_search": True,
+            "search_keywords": len(SEARCH_KEYWORDS)
         }
     }
     
@@ -528,7 +719,7 @@ def home():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Voice AI Assistant</title>
+        <title>Voice AI Assistant with Web Search</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 40px; }
             .status { font-size: 18px; margin: 20px 0; }
@@ -536,28 +727,44 @@ def home():
             .loading { color: orange; }
             .error { color: red; }
             code { background: #f4f4f4; padding: 2px 5px; }
+            .feature { background: #e8f5e9; padding: 10px; margin: 10px 0; border-radius: 5px; }
         </style>
     </head>
     <body>
-        <h1>🎙️ Voice AI Assistant Server</h1>
+        <h1>🎙️ Voice AI Assistant with Web Search</h1>
         <div class="status">Status: <span id="status">Checking...</span></div>
+        
+        <div class="feature">
+            <h3>🌐 New: Web Search Integration</h3>
+            <p>The assistant can now search the web for current information!</p>
+            <p><strong>Triggers:</strong> today, latest, news, current events, weather, prices, "who is", "what is", years (2024, 2025), etc.</p>
+        </div>
         
         <h2>API Endpoints:</h2>
         <ul>
-            <li><code>POST /process_audio</code> - Dsn Mechanics </li>
-            <li><code>POST /process_audio</code> - Process audio (WAV format, max 16MB)</li>
-            <li><code>GET /stream_audio/&lt;file_id&gt;</code> - Download audio response</li>
+            <li><code>POST /process_audio</code> - Process audio with AI + Web Search</li>
+            <li><code>GET /stream_audio/&lt;file_id&gt;</code> - Stream audio response</li>
             <li><code>GET /health</code> - Detailed health check</li>
             <li><code>GET /status</code> - Simple ready status</li>
         </ul>
         
         <h2>Features:</h2>
         <ul>
-            <li>Speech-to-Text (Whisper Tiny)</li>
-            <li>AI Response Generation (DialoGPT Small)</li>
-            <li>Text-to-Speech (gTTS)</li>
-            <li>Automatic file cleanup</li>
-            <li>Memory optimization</li>
+            <li>✅ Speech-to-Text (Whisper Tiny)</li>
+            <li>✅ AI Response (FLAN-T5)</li>
+            <li>✅ <strong>Web Search (DuckDuckGo)</strong></li>
+            <li>✅ Text-to-Speech (gTTS)</li>
+            <li>✅ Automatic file cleanup</li>
+            <li>✅ Memory optimization</li>
+        </ul>
+        
+        <h2>Example Questions:</h2>
+        <ul>
+            <li>"What's the weather like today?"</li>
+            <li>"Who is the current president?"</li>
+            <li>"What happened in 2024?"</li>
+            <li>"Tell me the latest news"</li>
+            <li>"What is the price of Bitcoin?"</li>
         </ul>
         
         <p><em>Optimized for ESP32 and Hugging Face Spaces</em></p>
@@ -600,7 +807,7 @@ def handle_large_file(e):
 
 if __name__ == '__main__':
     try:
-        logger.info("🚀 Starting Voice AI Assistant Server")
+        logger.info("🚀 Starting Voice AI Assistant Server with Web Search")
         logger.info(f"Environment: {'Hugging Face Spaces' if IS_HF_SPACE else 'Local'}")
         
         initialize_models()
