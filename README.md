@@ -17,8 +17,10 @@ Didn’t see the first version yet? Watch it here on YouTube.
 
 It includes full server setup, installation, and configuration steps.
 
-🎥 Watch the full build video here:
+> Don't forget to **Subscribe** to the [Channel](https://www.youtube.com/dsnmechanics/?sub_confirmation=1) and **Like** the video!
 
+🎥 Watch the full build video here:
+[![Project Review](https://img.youtube.com/vi/bdJ4xWtDzYY/0.jpg)](https://youtu.be/bdJ4xWtDzYY)
 
 The AI model runs on Hugging Face, while the ESP32-C3 works as a client handling voice input and real-time AI audio response.
 
@@ -102,8 +104,7 @@ Adafruit_GFX
 
 Clone the repo:
 
-git clone https://github.com/DsnEngineering/Dsn-AI-Voice-Assistant.git
-
+git clone https://github.com/derdacavga/Dsn-Portable-AI-Voice-Assistant.git
 
 Open .ino file in Arduino IDE and flash it to your ESP32-C3.
 
@@ -145,6 +146,7 @@ Designed with Fusion 360 for compactness and portability.
 
 📦 Download the STL:
 Cults3D - Dsn AI Assistant Shell
+https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model
 
 ![3D Model](images/enclosure.png)
 
@@ -155,7 +157,7 @@ Help me keep building open-source AI projects 🧠💡
 💖 Support on Patreon
 
 Get early access, exclusive projects, and behind-the-scenes updates.
-
+https://www.patreon.com/posts/esp32-based-ai-142318639
 ![Patreon Banner](images/patreon.png)
 
 🗺️ Future Plans
