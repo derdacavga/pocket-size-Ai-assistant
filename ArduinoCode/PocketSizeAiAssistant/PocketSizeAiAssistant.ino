@@ -91,11 +91,11 @@ void init_i2s_rx() {
     .data_in_num = I2S_DIN
   };
   if (i2s_driver_install(I2S_NUM_0, &rec_cfg, 0, NULL) != ESP_OK) {
-    Serial.println("!!! I2S RX install failed");
+    updateDisplay("I2S RX install Failed", 1);
     return;
   }
   if (i2s_set_pin(I2S_NUM_0, &rec_pin) != ESP_OK) {
-    Serial.println("!!! I2S RX pin set failed");
+    updateDisplay("I2S RX Failed", 1);
     i2s_driver_uninstall(I2S_NUM_0);
     return;
   }
@@ -128,30 +128,26 @@ void init_i2s_tx() {
 
   esp_err_t install_result = i2s_driver_install(I2S_NUM_0, &play_cfg, 0, NULL);
   if (install_result != ESP_OK) {
-    Serial.printf("!!! I2S TX install failed: %d\n", install_result);
+    updateDisplay("I2S TX install Failed", 1);
     return;
   }
 
   esp_err_t pin_result = i2s_set_pin(I2S_NUM_0, &play_pin);
   if (pin_result != ESP_OK) {
-    Serial.printf("!!! I2S TX pin set failed: %d\n", pin_result);
+    updateDisplay("I2S TX Failed", 1);
     i2s_driver_uninstall(I2S_NUM_0);
     return;
   }
   esp_err_t rate_result = i2s_set_sample_rates(I2S_NUM_0, SAMPLE_RATE);
-  Serial.printf("i2s_set_sample_rates: %d\n", rate_result);
 
   i2s_driver_installed = true;
-  Serial.println("✓ I2S TX initialized");
 }
 
 void setup() {
-  Serial.begin(115200);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   client.setInsecure();
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println("SSD1306 failed");
     delay(1000);
     display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
   }
@@ -175,25 +171,12 @@ void setup() {
 }
 
 void loop() {
-
-  static unsigned long lastHeapCheck = 0;
-  if (millis() - lastHeapCheck > 30000) { 
-    uint32_t free_heap = ESP.getFreeHeap();
-    Serial.printf("Heap check: %u bytes free\n", free_heap);
-
-    if (free_heap < 20000) { 
-      Serial.println("⚠ LOW HEAP WARNING!");
-    }
-    lastHeapCheck = millis();
-  }
-
   static unsigned long lastWiFiCheck = 0;
   if (millis() - lastWiFiCheck > 10000) {
     if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("!!! WiFi disconnected, reconnecting...");
+      updateDisplay("Wifi Reconnecting", 1);
       WiFi.reconnect();
     } else {
-      Serial.printf("WiFi: %ddBm\n", WiFi.RSSI());
     }
     lastWiFiCheck = millis();
   }
@@ -234,18 +217,12 @@ void startRecording() {
   record_buffer = (uint8_t*)malloc(record_buffer_size);
 
   if (!record_buffer) {
-    Serial.printf("!!! Malloc failed. Requested: %zu, Free heap: %u\n",
-                  record_buffer_size, ESP.getFreeHeap());
     updateDisplay("Memory Error!", 1);
     is_recording = false;
     delay(2000);
     updateDisplay("How Can I Help You", 1);
     return;
   }
-
-  Serial.printf("Recording buffer allocated: %zu bytes, Free heap: %u\n",
-                record_buffer_size, ESP.getFreeHeap());
-
   record_position = 44;
   updateDisplay("Recording...", 1);
 }
@@ -281,6 +258,8 @@ void processAudio() {
 }
 
 bool sendAudioToServer() {
+  updateDisplay("Thinking...", 1);
+  delay(50);
   HTTPClient http;
   if (!http.begin(client, server_url)) { return false; }
   http.addHeader("Content-Type", "audio/wav");
@@ -312,15 +291,10 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   is_playing = true;
   HTTPClient http;
 
-  Serial.print("Stream: ");
-  Serial.println(url);
-
-  Serial.printf("Free heap: %u bytes\n", ESP.getFreeHeap());
-
   http.setTimeout(30000);
 
   if (!http.begin(client, url)) {
-    Serial.println("GET begin failed");
+    updateDisplay("GET begin failed", 1);
     is_playing = false;
     return false;
   }
@@ -331,17 +305,16 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   int httpCode = http.GET();
 
   if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("GET failed: %d\n", httpCode);
+    updateDisplay("GET failed: %d\n", 1);
     http.end();
     is_playing = false;
     return false;
   }
 
   int contentLength = http.getSize();
-  Serial.printf("Content-Length: %d bytes\n", contentLength);
 
   if (contentLength <= 0 || contentLength > 500000) {
-    Serial.println("!!! Invalid content length");
+    updateDisplay("!!! Invalid content length", 1);
     http.end();
     is_playing = false;
     return false;
@@ -349,7 +322,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
 
   WiFiClient* stream = http.getStreamPtr();
   if (!stream) {
-    Serial.println("Stream ptr null");
+    updateDisplay("Stream ptr null", 1);
     http.end();
     is_playing = false;
     return false;
@@ -357,7 +330,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
 
   init_i2s_tx();
   if (!i2s_driver_installed) {
-    Serial.println("!!! I2S TX init failed");
+    updateDisplay("!!! I2S TX init failed", 1);
     http.end();
     is_playing = false;
     return false;
@@ -370,7 +343,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   uint8_t* header_buffer = (uint8_t*)malloc(HEADER_BUFFER_SIZE);
 
   if (!header_buffer) {
-    Serial.println("!!! Header buffer allocation failed");
+    updateDisplay("!!! Header buffer allocation failed", 1);
     http.end();
     deinit_i2s();
     init_i2s_rx();
@@ -381,8 +354,6 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   size_t header_bytes_read = 0;
   unsigned long header_start = millis();
 
-  Serial.println("Reading WAV header...");
-
   while (header_bytes_read < HEADER_BUFFER_SIZE && millis() - header_start < 10000) {
     int available = stream->available();
     if (available > 0) {
@@ -390,17 +361,16 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
       int actual = stream->read(header_buffer + header_bytes_read, to_read);
       if (actual > 0) {
         header_bytes_read += actual;
-        if (header_bytes_read >= 44) break; 
+        if (header_bytes_read >= 44) break;
       } else if (actual < 0) break;
     } else {
       if (!stream->connected()) break;
       delay(5);
     }
-    yield(); 
+    yield();  // Watchdog
   }
 
   if (header_bytes_read < 44) {
-    Serial.printf("!!! Insufficient data: %d bytes\n", header_bytes_read);
     free(header_buffer);
     http.end();
     deinit_i2s();
@@ -409,10 +379,8 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
     return false;
   }
 
-  Serial.println("\n=== Parsing WAV ===");
-
   if (header_buffer[0] != 'R' || header_buffer[1] != 'I' || header_buffer[2] != 'F' || header_buffer[3] != 'F') {
-    Serial.println("!!! Not a RIFF file");
+    updateDisplay("!!! Not a RIFF file", 1);
     free(header_buffer);
     http.end();
     deinit_i2s();
@@ -422,10 +390,9 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   }
 
   uint32_t file_size = header_buffer[4] | (header_buffer[5] << 8) | (header_buffer[6] << 16) | (header_buffer[7] << 24);
-  Serial.printf("File size: %u\n", file_size);
 
   if (header_buffer[8] != 'W' || header_buffer[9] != 'A' || header_buffer[10] != 'V' || header_buffer[11] != 'E') {
-    Serial.println("!!! Not a WAVE file");
+    updateDisplay("!!! Not a WAVE file", 1);
     free(header_buffer);
     http.end();
     deinit_i2s();
@@ -449,28 +416,21 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
     uint32_t chunk_size = header_buffer[pos] | (header_buffer[pos + 1] << 8) | (header_buffer[pos + 2] << 16) | (header_buffer[pos + 3] << 24);
     pos += 4;
 
-    Serial.printf("Chunk: '%s' size=%u at pos=%zu\n", chunk_id, chunk_size, pos - 8);
-
     if (strcmp(chunk_id, "fmt ") == 0) {
       if (pos + 16 <= header_bytes_read) {
         uint16_t audio_format = header_buffer[pos] | (header_buffer[pos + 1] << 8);
         num_channels = header_buffer[pos + 2] | (header_buffer[pos + 3] << 8);
         sample_rate = header_buffer[pos + 4] | (header_buffer[pos + 5] << 8) | (header_buffer[pos + 6] << 16) | (header_buffer[pos + 7] << 24);
         bits_per_sample = header_buffer[pos + 14] | (header_buffer[pos + 15] << 8);
-
-        Serial.printf("  Format: %u, Ch: %u, Rate: %u, Bits: %u\n",
-                      audio_format, num_channels, sample_rate, bits_per_sample);
       }
       pos += chunk_size;
 
     } else if (strcmp(chunk_id, "data") == 0) {
       data_offset = pos;
       data_size = chunk_size;
-      Serial.printf("  ✓ DATA at offset %zu, size=%u\n", data_offset, data_size);
       break;
 
     } else {
-      Serial.printf("  Skip '%s'\n", chunk_id);
       pos += chunk_size;
     }
 
@@ -479,7 +439,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   }
 
   if (data_offset == 0 || data_size == 0) {
-    Serial.println("!!! 'data' chunk not found");
+    updateDisplay("!!! 'data' chunk not found", 1);
     free(header_buffer);
     http.end();
     deinit_i2s();
@@ -488,10 +448,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
     return false;
   }
 
-  Serial.println("===================\n");
-
   if (sample_rate != SAMPLE_RATE) {
-    Serial.printf("⚠ Adjusting rate to %u\n", sample_rate);
     i2s_set_sample_rates(I2S_NUM_0, sample_rate);
   }
 
@@ -499,7 +456,6 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
 
   if (data_offset < header_bytes_read) {
     size_t audio_in_header = header_bytes_read - data_offset;
-    Serial.printf("Playing %zu bytes from header...\n", audio_in_header);
 
     size_t bytes_written = 0;
     i2s_write(I2S_NUM_0, header_buffer + data_offset, audio_in_header,
@@ -510,13 +466,11 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   free(header_buffer);
   header_buffer = nullptr;
 
-  Serial.printf("Free heap after header: %u bytes\n", ESP.getFreeHeap());
-
   const size_t PLAY_BUFFER_SIZE = 512;
   uint8_t* playback_buffer = (uint8_t*)malloc(PLAY_BUFFER_SIZE);
 
   if (!playback_buffer) {
-    Serial.println("!!! Playback buffer allocation failed");
+    updateDisplay("!!! Playback buffer allocation failed", 1);
     http.end();
     deinit_i2s();
     init_i2s_rx();
@@ -524,12 +478,10 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
     return false;
   }
 
-  size_t total_bytes_read = total_bytes_written; 
+  size_t total_bytes_read = total_bytes_written;
   unsigned long lastDataTime = millis();
   unsigned long lastYield = millis();
   const unsigned long dataTimeoutMs = 5000;
-
-  Serial.println("Streaming audio...");
 
   while (total_bytes_read < data_size) {
     if (millis() - lastYield > 100) {
@@ -538,12 +490,11 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
     }
 
     if (millis() - lastDataTime > dataTimeoutMs) {
-      Serial.printf("⚠ Timeout at %zu/%u\n", total_bytes_read, data_size);
+      updateDisplay("Timeout", 1);
       break;
     }
 
     if (!stream->connected() && stream->available() == 0) {
-      Serial.println("Stream ended");
       break;
     }
 
@@ -565,7 +516,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
                                      &bytes_written, 1000 / portTICK_PERIOD_MS);
 
         if (result != ESP_OK) {
-          Serial.printf("!!! I2S error: %d\n", result);
+          updateDisplay("!!! I2S error: %d\n", 1);
           break;
         }
 
@@ -574,12 +525,10 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
         int progress = (total_bytes_read * 100) / data_size;
         static int last_prog = -1;
         if (progress / 20 != last_prog / 20) {
-          Serial.printf("Progress: %d%% (%zu/%u) [Heap: %u]\n",
-                        progress, total_bytes_read, data_size, ESP.getFreeHeap());
           last_prog = progress;
         }
       } else if (bytes_read < 0) {
-        Serial.println("!!! Read error");
+        updateDisplay("!!! Read error", 1);
         break;
       }
     } else {
@@ -588,9 +537,6 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   }
 
   free(playback_buffer);
-
-  Serial.printf("✓ Complete: %zu/%u read, %zu written\n",
-                total_bytes_read, data_size, total_bytes_written);
 
   delay(150);
   i2s_stop(I2S_NUM_0);
@@ -606,10 +552,7 @@ bool streamAndPlayAudioWithHTTPClient(const String& url) {
   updateDisplay("How Can I Help You", 1);
   is_playing = false;
 
-  Serial.printf("Final heap: %u bytes\n", ESP.getFreeHeap());
-
   bool success = total_bytes_written > 0 && total_bytes_read >= data_size * 0.95;
-  Serial.printf("Result: %s\n", success ? "SUCCESS" : "INCOMPLETE");
 
   return success;
 }
