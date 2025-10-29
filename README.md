@@ -1,118 +1,184 @@
 🧠 Dsn AI Voice Assistant v2
+⚡ Much More Responsive, Brilliant, and Portable.
+ 
+🎬 Introduction
 
-Much More Responsive, Brilliant, and Portable.
+Hey everyone 👋
+Welcome to the second generation of my ESP32-based AI Voice Assistant — now faster, smarter, and more portable than ever!
 
-Welcome to the second version of my ESP32-based AI voice assistant project — Dsn AI Assistant!
-This version is faster, smarter, and more optimized for portability.
-
-📺 Before you continue, don’t forget to Like
- 👍 and Subscribe
+📺 Before you continue:
+Please 👍 Like
+, 💬 Comment
+, and 🔔 Subscribe
 !
-That’s important to keep the project growing.
+Your support helps this project grow ❤️
 
-🎙️ Introduction
+Didn’t see the first version yet? Watch it here on YouTube.
 
-Hello everyone!
-In this project, I’m introducing a new ESP32-based AI Assistant — the second version of my previous design.
+It includes full server setup, installation, and configuration steps.
 
-🧩 If you haven’t watched the first version, check it out here
-.
-It includes the full server setup, installation, and configuration details.
+🎥 Watch the full build video here:
 
-The AI model is hosted on Hugging Face, because the ESP32’s flash, RAM, and clock speed are not sufficient to run large models locally.
-Instead, the ESP32 acts as a client, handling voice input and audio response playback.
 
-This version includes:
+The AI model runs on Hugging Face, while the ESP32-C3 works as a client handling voice input and real-time AI audio response.
 
-⚙️ New hardware setup
+⚙️ Features at a Glance
 
-🧠 Improved AI model
-
-💬 Real-time internet-connected LLM responses
-
-💖 Patreon community and exclusive updates
+✅ Real-time AI voice responses
+✅ WAV streaming playback (no SPIFFS delay)
+✅ Hugging Face cloud AI integration
+✅ Compact SSD1306 OLED for info display
+✅ Optimized GPIO & RAM usage for ESP32-C3
+✅ Portable 3D-printed enclosure
+✅ Designed with Fusion 360
 
 🧩 Components Used
 Component	Description
-ESP32-C3	Custom dev board (you can use any ESP32-C3 board)
-INMP441	I2S MEMS Microphone
-MAX98357A	I2S Audio Amplifier
-SSD1306	OLED Display (I²C)
+ESP32-C3	Main controller (any dev board works)
+INMP441	I2S MEMS microphone
+MAX98357A	I2S audio amplifier
+SSD1306	OLED display (I²C)
 
-⚠️ Note: ESP32-C3 has fewer GPIO pins and less SRAM compared to other ESP32 models.
-I optimized memory usage, GPIO mapping, and buffer values after multiple iterations.
+⚠️ Note: ESP32-C3 has fewer GPIO pins and less SRAM.
+The I2S devices share the same pins except for DIN and DOUT.
+MAX98357A’s SD pin is tied to 3.3V to stay always ON.
 
-🧠 Pin & Setup Notes
-
-The I2S microphone and I2S amplifier share some pins (except DIN and DOUT).
-
-The MAX98357A SD pin is connected to 3.3V (always ON).
-
-The OLED uses only 2 pins — perfect for low-pin-count boards.
-
-You can find the complete wiring diagram in the image below 👇
-
-(Add your wiring image here)
-![Wiring Diagram](images/wiring_diagram.png)
+📸 Connection Diagram:
+![Wiring Diagram](images/wiring.png)
 
 💻 Software Overview
 
-In the previous version, the ESP32:
+In the first version, ESP32 downloaded MP3 audio files and played them from SPIFFS.
+Now in v2:
 
-Downloaded an MP3 audio file from the server to SPIFFS
+🚀 Streams WAV audio directly from server
+🎧 Instant playback — no file delay
+🌍 Web-connected AI using Hugging Face
+🗣️ Button-based activation (hands-free version coming soon)
+🖥️ 2-pin OLED keeps things lightweight
 
-Then played it locally
+🧠 Version Comparison
+Feature	v1	v2
+Audio Format	MP3 (downloaded)	WAV (streamed)
+Response Speed	Slow	Instant
+AI Model	Local	Hugging Face
+Connectivity	Offline	Web-based
+Display	TFT	OLED
+Activation	Button	Button / Planned Voice Wake
+🧰 Setup & Installation
+🔧 1. Hardware Setup
 
-Now, in Version 2, it:
+Connect the components as shown in the wiring diagram.
+Keep I2S lines short for minimal noise.
 
-🎧 Streams WAV audio directly from the server
+💻 2. Arduino IDE Setup
 
-⚡ Plays the response instantly — much faster!
+Install Arduino IDE v2.x
 
-🌍 Connects to the internet to provide real-time answers using LLM
+Add the ESP32 board manager URL under
 
-🗣️ Voice commands start with a button press (hands-free mode planned for the next version)
+File → Preferences → Additional Board URLs
+https://dl.espressif.com/dl/package_esp32_index.json
 
-🧠 Improvements Summary
-Feature	Previous	New Version
-Audio Format	MP3 (download & play)	WAV (live stream)
-Response Time	Slow	Instant
-Model Source	Local files	Hugging Face
-Connectivity	Offline	Web-connected (real-time)
-Display	TFT	OLED (2-pin minimal)
-Control	Button	Button / Planned Hands-free
-📁 Files & Resources
 
-🧩 Source Code: GitHub Repository
+Select board:
 
-🧰 3D Models: Cults3D Page
+Tools → Board → ESP32C3 Dev Module
 
-💖 Support Me on Patreon: Patreon Page
 
-Get early access, detailed tutorials, and exclusive Patreon-only projects!
+Install required libraries:
 
-🧱 Making It Portable
+ArduinoJson
 
-I designed a custom shell in Fusion 360 to make the assistant truly portable.
-You can download the model file from the link in the description.
+WiFi
 
-After assembling all components, I noticed a little speaker noise —
-The I2S setup pushes the ESP32-C3 pretty hard, but I’ll fix that in the next revision.
+HTTPClient
 
-🧩 Feedback & Next Steps
+Adafruit_SSD1306
 
-💬 Write in the comments — what do you want to see in the next version?
-I’m considering:
+Adafruit_GFX
 
-Hands-free voice activation
+(Built-in) I2S
 
-Battery optimization
+Clone the repo:
 
-Advanced OLED animations
+git clone https://github.com/DsnEngineering/Dsn-AI-Voice-Assistant.git
 
-Stay tuned for the next project — see you soon! 🚀
+
+Open .ino file in Arduino IDE and flash it to your ESP32-C3.
+
+🌐 3. Hugging Face Server Setup
+
+The AI model is hosted on Hugging Face Spaces:
+👉 DsnEngineering / ESP32-AI-Voice-Assistant Space
+
+To create your own:
+
+Sign up at huggingface.co
+.
+
+Create a new Space → Choose Gradio / FastAPI template.
+
+Deploy your AI model (STT + LLM + TTS).
+
+Copy the API endpoint and update your ESP32 sketch:
+
+const char* ai_server = "https://DsnEngineering-ESP32-AI-Voice-Assistant.hf.space/api";
+
+🎧 4. Usage
+
+Press the button to start recording voice.
+
+ESP32 sends your voice to the server.
+
+The server processes it and streams back AI-generated audio.
+
+ESP32 plays it instantly via MAX98357A amplifier.
+
+OLED shows connection status and response text.
+
+🧠 Tip: Keep a stable Wi-Fi connection for the best experience.
+
+🧱 3D Printed Enclosure
+
+Designed with Fusion 360 for compactness and portability.
+
+📦 Download the STL:
+Cults3D - Dsn AI Assistant Shell
+
+![3D Model](images/enclosure.png)
+
+💖 Support the Project
+
+Help me keep building open-source AI projects 🧠💡
+
+💖 Support on Patreon
+
+Get early access, exclusive projects, and behind-the-scenes updates.
+
+![Patreon Banner](images/patreon.png)
+
+🗺️ Future Plans
+
+✨ Hands-free voice activation
+🔋 Battery-powered portable version
+🎨 Animated OLED interface
+📡 Improved audio noise cancellation
 
 🧑‍💻 Author
 
-Dsn Engineering
-ESP32 • AI • Embedded Systems • 3D Design
+👨‍🔬 Dsn Industries
+Embedded Systems | AI | ESP32 | 3D Design
+
+🌐 GitHub
+ • YouTube
+ • Patreon
+ • Cults3D
+ • Hugging Face
+
+📜 License
+
+Licensed under the  GPL-3.0 license
+
+💬 Comment your ideas below — what should I build next?
+See you in the next project 🚀
