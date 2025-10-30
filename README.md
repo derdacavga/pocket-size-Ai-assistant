@@ -1,7 +1,7 @@
 🧠 Dsn AI Voice Assistant v2
 ⚡ Much More Responsive, Brilliant, and Portable.
 
-![3D Model](images/Cover.png)
+![3D Model](images/Cover.jpg)
  
 🎬 Introduction
 
@@ -43,7 +43,7 @@ The I2S devices share the same pins except for DIN and DOUT.
 MAX98357A’s SD pin is tied to 3.3V to stay always ON.
 
 📸 Connection Diagram:
-![Wiring Diagram](images/schematic.png)
+![Wiring Diagram](images/schematic.jpg)
 
 💻 Software Overview
 
