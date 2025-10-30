@@ -68,46 +68,7 @@ Activation	Button	Button / Planned Voice Wake
 Connect the components as shown in the wiring diagram.
 Keep I2S lines short for minimal noise.
 
-💻 2. Arduino IDE Setup
-
-Install Arduino IDE v2.x
-
-Add the ESP32 board manager URL under
-
-File → Preferences → Additional Board URLs
-https://dl.espressif.com/dl/package_esp32_index.json
-
-
-Select board:
-
-Tools → Board → ESP32C3 Dev Module
-
-
-Install required libraries:
-
-ArduinoJson
-
-WiFi
-
-HTTPClient
-
-Adafruit_SSD1306
-
-Adafruit_GFX
-
-(Built-in) I2S
-
-Clone the repo:
-
-git clone https://github.com/derdacavga/Dsn-Portable-AI-Voice-Assistant.git
-
-Open .ino file in Arduino IDE and flash it to your ESP32-C3.
-
-🌐 3. Hugging Face Server Setup
-
-The AI model is hosted on Hugging Face Spaces:
-👉 DsnEngineering / ESP32-AI-Voice-Assistant Space
-
+🌐 3. Hugging Face Server Setup 
 To create your own:
 
 Sign up at huggingface.co
@@ -143,7 +104,7 @@ Designed with Fusion 360 for compactness and portability.
 Cults3D - Dsn AI Assistant Shell
 https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model
 
-![3D Model](images/enclosure.png)
+![3D Model](images/Cover.HEIC)
 
 💖 Support the Project
 
@@ -153,6 +114,7 @@ Help me keep building open-source AI projects 🧠💡
 
 Get early access, exclusive projects, and behind-the-scenes updates.
 https://www.patreon.com/posts/esp32-based-ai-142318639
+
 ![Patreon Banner](images/patreon.png)
 
 🗺️ Future Plans
