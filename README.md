@@ -79,14 +79,11 @@ Designed with Fusion 360 for compactness and portability.
 📦 Download the STL: 
 [Cults3D - Dsn AI Assistant Shell](https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model)
 
-[Channel](https://www.youtube.com/dsnmechanics/?sub_confirmation=1)
-
 💖 Support the Project
 Help me keep building open-source AI projects 🧠💡
 
-💖 Support on Patreon
-Get early access, exclusive projects, and behind-the-scenes updates.
-https://www.patreon.com/posts/esp32-based-ai-142318639 
+💖 Support on [Patreon](https://www.patreon.com/posts/esp32-based-ai-142318639)
+Get early access, exclusive projects, and behind-the-scenes updates. 
 
 🗺️ Future Plans
 
@@ -94,8 +91,6 @@ https://www.patreon.com/posts/esp32-based-ai-142318639
 🔋 Battery-powered portable version
 🎨 Animated OLED interface
 📡 Improved audio noise cancellation
-
-🧑‍💻 Author
 
 👨‍🔬 Dsn Industries
 Embedded Systems | AI | ESP32 | 3D Design
