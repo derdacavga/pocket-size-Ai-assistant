@@ -1,5 +1,7 @@
 🧠 Dsn AI Voice Assistant v2
 ⚡ Much More Responsive, Brilliant, and Portable.
+
+![3D Model](images/Cover.png)
  
 🎬 Introduction
 
@@ -103,8 +105,6 @@ Designed with Fusion 360 for compactness and portability.
 📦 Download the STL:
 Cults3D - Dsn AI Assistant Shell
 https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model
-
-![3D Model](images/Cover.HEIC)
 
 💖 Support the Project
 
