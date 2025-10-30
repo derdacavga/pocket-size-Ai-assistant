@@ -20,6 +20,7 @@ It includes full server setup, installation, and configuration steps.
 [![Project Review](https://img.youtube.com/vi/bdJ4xWtDzYY/0.jpg)](https://youtu.be/bdJ4xWtDzYY)
 
 🎥 Previous Version:
+
 [![Project Review](https://img.youtube.com/vi/C5hhSK7wqWI/0.jpg)](https://youtu.be/C5hhSK7wqWI)
 
 The AI model runs on Hugging Face, while the ESP32-C3 works as a client handling voice input and real-time AI audio response.
