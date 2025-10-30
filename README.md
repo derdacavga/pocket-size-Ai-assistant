@@ -77,8 +77,9 @@ Keep I2S lines short for minimal noise.
 Designed with Fusion 360 for compactness and portability.
 
 📦 Download the STL: 
-![Cults3D - Dsn AI Assistant Shell](https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model)
+[Cults3D - Dsn AI Assistant Shell](https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model)
 
+[Channel](https://www.youtube.com/dsnmechanics/?sub_confirmation=1)
 
 💖 Support the Project
 Help me keep building open-source AI projects 🧠💡
