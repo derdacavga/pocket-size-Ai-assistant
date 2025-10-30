@@ -5,12 +5,7 @@
 
 Hey everyone 👋
 Welcome to the second generation of my ESP32-based AI Voice Assistant — now faster, smarter, and more portable than ever!
-
-📺 Before you continue:
-Please 👍 Like
-, 💬 Comment
-, and 🔔 Subscribe
-!
+ 
 Your support helps this project grow ❤️
 
 Didn’t see the first version yet? Watch it here on YouTube.
@@ -46,7 +41,7 @@ The I2S devices share the same pins except for DIN and DOUT.
 MAX98357A’s SD pin is tied to 3.3V to stay always ON.
 
 📸 Connection Diagram:
-![Wiring Diagram](images/wiring.png)
+![Wiring Diagram](images/schematic.png)
 
 💻 Software Overview
 
