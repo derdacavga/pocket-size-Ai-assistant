@@ -69,53 +69,23 @@ Activation	Button	Button / Planned Voice Wake
 
 Connect the components as shown in the wiring diagram.
 Keep I2S lines short for minimal noise.
-
-🌐 3. Hugging Face Server Setup 
-To create your own:
-
-Sign up at huggingface.co
-.
-
-Create a new Space → Choose Gradio / FastAPI template.
-
-Deploy your AI model (STT + LLM + TTS).
-
-Copy the API endpoint and update your ESP32 sketch:
-
-const char* ai_server = "https://DsnEngineering-ESP32-AI-Voice-Assistant.hf.space/api";
-
-🎧 4. Usage
-
-Press the button to start recording voice.
-
-ESP32 sends your voice to the server.
-
-The server processes it and streams back AI-generated audio.
-
-ESP32 plays it instantly via MAX98357A amplifier.
-
-OLED shows connection status and response text.
+ 
 
 🧠 Tip: Keep a stable Wi-Fi connection for the best experience.
 
 🧱 3D Printed Enclosure
-
 Designed with Fusion 360 for compactness and portability.
 
-📦 Download the STL:
-Cults3D - Dsn AI Assistant Shell
-https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model
+📦 Download the STL: 
+![Cults3D - Dsn AI Assistant Shell](https://cults3d.com/en/3d-model/tool/dsn-ai-assistant-3d-model)
+
 
 💖 Support the Project
-
 Help me keep building open-source AI projects 🧠💡
 
 💖 Support on Patreon
-
 Get early access, exclusive projects, and behind-the-scenes updates.
-https://www.patreon.com/posts/esp32-based-ai-142318639
-
-![Patreon Banner](images/patreon.png)
+https://www.patreon.com/posts/esp32-based-ai-142318639 
 
 🗺️ Future Plans
 
