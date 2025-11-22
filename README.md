@@ -100,11 +100,16 @@ Get early access, exclusive projects, and behind-the-scenes updates.
 👨‍🔬 Dsn Industries
 Embedded Systems | AI | ESP32 | 3D Design
 
-🌐 GitHub
- • YouTube
- • Patreon
- • Cults3D
- • Hugging Face
+## Games
+Maze Escape: https://play.google.com/store/apps/details?id=com.DsnMechanics.MazeEscape
+
+Air Hockey: https://play.google.com/store/apps/details?id=com.DsnMechanics.AirHockey
+
+Click Challenge: https://play.google.com/store/apps/details?id=com.DsNMechanics.ClickChallenge
+
+Flying Triangels: https://play.google.com/store/apps/details?id=com.DsnMechanics.Triangle
+
+SkyScrapper : https://play.google.com/store/apps/details?id=com.DsnMechanics.SkyScraper
 
 📜 License
 
